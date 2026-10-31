@@ -278,6 +278,8 @@ body.day .evlabel { background: rgba(255, 255, 255, 0.86); color: #1c1c1e; borde
 
 body.intro #panel, body.intro #dock, body.intro #top, body.intro #colbadge { opacity: 0; pointer-events: none; }
 #top, #dock { transition: opacity .6s ease; }
+
+.off-ready { color: #7fe3a0; font-weight: 700; } .off-wait { color: #f6d58e; } .off-fail { color: #ff9d9d; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -337,7 +339,7 @@ body.intro #panel, body.intro #dock, body.intro #top, body.intro #colbadge { opa
     <h1>In the beginning…</h1>
     <p>Walk the whole Bible across the face of the earth — from Eden to the New Jerusalem, with the empires of every age around it and an honest word on what is certain and what is debated.</p>
     <div class="btns"><button class="bigbtn" id="startBtn">Begin the walk</button><button class="bigbtn ghost" id="resumeBtn" style="display:none">Continue</button><button class="bigbtn ghost" id="exploreBtn">Explore the globe</button></div>
-    <div class="foot" id="introFoot">375 events · 1,300+ biblical places · 28 journeys · works offline</div>
+    <div class="foot" id="introFoot">375 events · 1,300+ biblical places · 28 journeys</div>
   </div>
 </div>
 <div id="toast" class="glass"></div>
@@ -1155,7 +1157,7 @@ $('#themeBtn').onclick = () => { S.theme = S.theme === 'day' ? 'night' : 'day'; 
 $('#brandBtn').onclick = () => {
   const n = { ev: EVENTS.length, pl: PLACES.filter((p) => p.c).length, j: D.journeys.length, k: D.kLabels.length };
   $('#aboutBody').innerHTML = `
-  <p>A walk through the whole Bible on a 3D globe: <b>${n.ev}</b> events from Creation to the New Jerusalem, <b>${n.pl.toLocaleString()}</b> identified biblical places, <b>${n.j}</b> animated journeys and <b>${n.k}</b> empires and kingdoms that appear and fade with the timeline. Everything is inside this one page — it needs no internet once loaded.</p>
+  <p>A walk through the whole Bible on a 3D globe: <b>${n.ev}</b> events from Creation to the New Jerusalem, <b>${n.pl.toLocaleString()}</b> identified biblical places, <b>${n.j}</b> animated journeys and <b>${n.k}</b> empires and kingdoms that appear and fade with the timeline. Everything is inside this one page — it needs no internet once loaded.</p><p id="offAbout" style="font-weight:700"></p>
   <h3>How to use it</h3><ul><li><b>▶ Walk</b> plays the story; ◀ ▶ step one event; drag the timeline to scrub through history.</li><li>Tap the gold location row in a story to open that place: confidence, rival identifications on the map, and every verse that mentions it.</li><li>Tap a person to trace their whole journey. Search understands places, people and references (“Acts 16”, “Gen 12”).</li><li><b>Collections</b> walk themed paths: Prophets, Paul’s letters, Giants & Watchers, Apostles, Archaeology, Revelation.</li><li>Keyboard: ← → step · space play · / search · Esc close.</li></ul>
   <h3>Reading the certainty</h3><div class="legend">${[5, 4, 3, 2, 1].map((k) => `${confBars(k)}<span>${CONF[k]}</span>`).join('')}<span class="conf" style="opacity:.4"><b></b><b></b><b></b><b></b><b></b></span><span>${CONF[0]} (symbolic marker)</span></div>
   <p style="margin-top:12px">Every story has a <b>Scholarship & certainty</b> note that states plainly where history, archaeology or interpretation is disputed. Material outside the Protestant canon (1 Enoch, Maccabees), church tradition, world history and prophetic interpretation are each labelled.</p>
@@ -1167,7 +1169,7 @@ $('#brandBtn').onclick = () => {
   <li>Some empire outlines (Persian, Alexander, Ptolemaic, Seleucid, Roman, Parthian, Nabataean, Han, Mauryan, Kush, Aksum, Carthage, Greek): <a href="https://github.com/aourednik/historical-basemaps">historical-basemaps</a> by A. Ourednik (GPL-3.0); other kingdom outlines drawn for this atlas from standard Bible atlases. All are approximate.</li>
   <li>Map engine: <a href="https://maplibre.org/">MapLibre GL JS</a> (BSD). Fonts: Inter and Cormorant Garamond (SIL OFL).</li>
   <li>Narrative, dates and notes written for this atlas, drawing on Scripture, Josephus, the church fathers and mainstream archaeological scholarship.</li></ul>`;
-  openModal('#mAbout');
+  openModal('#mAbout'); if (window.__PWA__) probeOffline(); else renderOffline();
 };
 
 // toast
@@ -1214,12 +1216,44 @@ function rotLoop(t) {
 function onResize() { placeDock(); drawSpace(); if (isMobile()) setSheet(sheetState); }
 window.addEventListener('resize', () => { clearTimeout(onResize.t); onResize.t = setTimeout(onResize, 120); });
 
+// ───────── offline status
+const OFF = { state: location.protocol === 'file:' ? 'file' : window.__PWA__ ? 'checking' : 'none', msg: '', tries: 0 };
+const OFFTXT = {
+  ready: ['Offline ready ✓', 'off-ready'], preparing: ['Saving offline copy… keep this screen open', 'off-wait'], checking: ['Checking offline copy…', 'off-wait'],
+  fail: ['Offline copy could not be saved', 'off-fail'], file: ['Runs offline — no internet needed', 'off-ready'], unsupported: ['This browser cannot save offline copies', 'off-fail'], none: ['', ''],
+};
+function offlineLine() { const [t, c] = OFFTXT[OFF.state] || OFFTXT.none; return t ? `<span class="${c}">${esc(t)}${OFF.state === 'fail' && OFF.msg ? ' — ' + esc(OFF.msg) : ''}</span>` : ''; }
+function renderOffline() { const a = $('#offstat'); if (a) a.innerHTML = offlineLine(); const b = $('#offAbout'); if (b) b.innerHTML = offlineLine(); }
+async function probeOffline() {
+  if (!window.__PWA__ || !('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const hit = reg ? await caches.match(new URL('index.html', reg.scope).href) : null;
+    if (hit) OFF.state = 'ready'; else if (OFF.msg) OFF.state = 'fail'; else OFF.state = reg ? 'preparing' : 'checking';
+  } catch (e) { OFF.state = 'fail'; OFF.msg = e.message; }
+  renderOffline();
+  if (OFF.state !== 'ready' && OFF.state !== 'fail' && OFF.tries++ < 40) setTimeout(probeOffline, 2500);
+}
+function setupOffline() {
+  if (!window.__PWA__) { renderOffline(); return; }
+  if (!('serviceWorker' in navigator) || !/^https?:/.test(location.protocol)) { OFF.state = 'unsupported'; renderOffline(); return; }
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    const m = e.data || {};
+    if (m.ba === 'fail') { OFF.msg = m.msg || ''; OFF.state = 'fail'; renderOffline(); }
+    if (m.ba === 'cached' || m.ba === 'active') probeOffline();
+  });
+  const go = () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(() => probeOffline()).catch((e) => { OFF.state = 'fail'; OFF.msg = e.message; renderOffline(); });
+  if (document.readyState === 'complete') go(); else window.addEventListener('load', go);
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+}
+
 // ───────── init
 function hideIntro() { document.body.classList.remove('intro'); $('#intro').classList.add('hide'); setTimeout(() => ($('#intro').style.display = 'none'), 1100); }
 function init() {
   document.body.classList.add('intro');
   drawSpace(); applyTheme(); placeDock(); buildSeq(); buildDock();
-  $('#introFoot').textContent = `${EVENTS.length} events · ${PLACES.filter((p) => p.c).length.toLocaleString()} biblical places · ${D.journeys.length} journeys · works offline`;
+  $('#introFoot').innerHTML = `${EVENTS.length} events · ${PLACES.filter((p) => p.c).length.toLocaleString()} biblical places · ${D.journeys.length} journeys<br><span id="offstat"></span>`;
+  renderOffline();
   const last = store.get('last', null);
   if (last && EV[last] && EV[last].gi > 0) { $('#resumeBtn').style.display = ''; $('#resumeBtn').textContent = 'Continue: ' + (EV[last].t.length > 26 ? EV[last].t.slice(0, 24) + '…' : EV[last].t); }
   $('#startBtn').onclick = () => { hideIntro(); setSheet('peek'); goTo(0); };
@@ -1228,7 +1262,7 @@ function init() {
   const h = location.hash.match(/^#ev-(.+)$/);
   if (h && EV[h[1]]) { hideIntro(); const go = () => goToId(h[1]); mapReady ? go() : map.once('load', go); }
   requestAnimationFrame(rotLoop);
-  if (window.__PWA__ && 'serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
+  setupOffline();
 }
 map.on('load', () => {
   mapReady = true; applyTheme(); applyLayers(); bindMapClicks();
