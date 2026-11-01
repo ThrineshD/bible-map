@@ -1,5 +1,5 @@
-/* Bible Atlas 3D — offline service worker (version ba3d-7d43efe16d) */
-const V = 'ba3d-7d43efe16d';
+/* Bible Atlas 3D — offline service worker (version ba3d-4a0f80ab20) */
+const V = 'ba3d-4a0f80ab20';
 const SCOPE = self.registration.scope;
 const SHELL = new URL('index.html', SCOPE).href;
 const OPTIONAL = ['manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
